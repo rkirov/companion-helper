@@ -117,6 +117,31 @@ example : Decidable (∀ n : ℕ, n + 0 = n) := by
 
 [tao-decide]: https://github.com/teorth/analysis/blob/52ca2a255e856f69dd04bd441411afeb043a44f8/Analysis/Section_9_2.lean#L56-L70
 
+## Linters
+
+Enable mathlib's style linters in the companion's `lakefile.toml`:
+
+```toml
+[leanOptions]
+weak.linter.style.longLine = true
+linter.unusedVariables = true
+```
+
+The `weak.` prefix sets the option only where the linter is registered,
+which avoids errors in any Lean files that don't import mathlib. The
+linter must also be visible in the file's import chain — the simplest
+way is to add `import Mathlib.Tactic.Linter.Style` at the top of the
+project's root `.lean` file.
+
+`linter.style.longLine` flags lines over 100 characters — companions
+drift long fast with `have` chains and named hypotheses, and a hard
+limit forces clean reformatting. The linter has sensible exceptions
+(URLs, `#guard_msgs` doc-strings, `import` lines).
+
+For the heavier, whole-project lint pass — unused arguments, missing
+docstrings, ill-formed names — run `lake exe runLinter <CompanionName>`
+in CI.
+
 ## Publishing
 
 Each companion should publish a Verso artifact (an HTML rendering of the

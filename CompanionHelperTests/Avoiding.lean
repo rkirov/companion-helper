@@ -1,6 +1,7 @@
 import CompanionHelper
 import Mathlib.Algebra.Group.Basic
 import Mathlib.Order.Defs.LinearOrder
+import Mathlib.Tactic.Linter.Style
 import Aesop
 
 /-!

@@ -1,6 +1,10 @@
 name = "companion-helper"
 defaultTargets = ["CompanionHelper", "CompanionHelperTests"]
 
+[leanOptions]
+weak.linter.style.longLine = true
+linter.unusedVariables = true
+
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
