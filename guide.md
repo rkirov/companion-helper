@@ -15,6 +15,21 @@
 
 [style]: https://leanprover-community.github.io/contribute/style.html
 
+## Reproving theorems from the text
+
+Theorems that come with proofs in the textbook are not exercises — the
+reader is not filling in `sorry`. But the *proof* is still the lesson, and
+the Lean translation should mirror the textbook's argument so a reader can
+follow both side-by-side, step for step.
+
+**Preserve intermediate steps.** Where the text writes "first observe X,
+then Y, then conclude Z", surface those as `have` statements (or named
+sub-lemmas) instead of collapsing into one tactic.
+
+If a mathlib version of the same theorem exists, make sure to mention that 
+name with `recall`. If a shorter mathlib proof exists, ok to show it after
+the text version.
+
 ## Use mathlib definitions, bridge when needed
 
 Default: when the text introduces a concept already in mathlib (e.g.,
