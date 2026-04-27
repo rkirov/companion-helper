@@ -1,0 +1,14 @@
+name = "companion-helper"
+defaultTargets = ["CompanionHelper", "CompanionHelperTests"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.29.0"
+
+[[lean_lib]]
+name = "CompanionHelper"
+
+[[lean_lib]]
+name = "CompanionHelperTests"
+globs = ["CompanionHelperTests"]
