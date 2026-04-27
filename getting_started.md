@@ -92,6 +92,23 @@ playtest) is complete.
   solvable with the toolkit the text provides.
 - CI builds green; mathlib linters pass.
 
+## Chapter status table
+
+The companion's top-level README should expose a per-chapter status
+table so readers and contributors can see at a glance which chapters are
+review-clean and which are playtested.
+
+```markdown
+| Chapter | Reviewed | Playtested |
+|---|---|---|
+| 1. Groups | ✓ | ✓ |
+| 2. Subgroups | ✓ | — |
+| 3. Quotients | — | — |
+```
+
+A row earns ✓ only after the corresponding step in the per-chapter
+workflow above finishes.
+
 ## What to delegate to AI
 
 - **First-pass translation** of definitions, theorems, exercises.
