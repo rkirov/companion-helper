@@ -45,12 +45,16 @@ rev = "v4.29.0"            # match the latest mathlib release tag
 
 [[require]]
 name = "companion-helper"  # this repo, for @[avoiding ...]
-git = "https://github.com/<org>/companion-helper"
+git = "https://github.com/rkirov/companion-helper"
 rev = "main"
 ```
 
 After `lake update mathlib && lake exe cache get`, mathlib is ready
 without recompilation.
+
+For CI, copy `.github/workflows/build.yml` from this repo as a starting
+point — it's a minimal `leanprover/lean-action@v1` workflow with the
+mathlib cache enabled.
 
 ## Per-chapter workflow
 
