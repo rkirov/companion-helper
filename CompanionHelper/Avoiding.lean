@@ -63,7 +63,9 @@ initialize registerBuiltinAttribute {
     let env ← getEnv
     let some info := env.find? decl
       | throwError "avoiding: declaration `{decl}` not found"
-    let some value := info.value?
+    -- `allowOpaque := true` is required to get the body of theorems and
+    -- opaque definitions; without it, `value?` returns `none` for them.
+    let some value := info.value? (allowOpaque := true)
       | throwError "avoiding: declaration `{decl}` has no body to inspect"
     let used := collectConstNames value
     let mut violations : Array Name := #[]

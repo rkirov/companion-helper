@@ -8,7 +8,7 @@ linter.unusedVariables = true
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.29.0"
+rev = "master"
 
 [[lean_lib]]
 name = "CompanionHelper"
