@@ -14,10 +14,25 @@ theorem mul_one_ex (n : Nat) : n * 1 = n := by
 -- error: declaration 'mul_one_ex' uses forbidden lemma(s): [Nat.mul_one]
 ```
 
-The check is intentionally shallow — direct `Expr.const` references in the
-proof term. A user-defined wrapper defeats it. Per the design doc, the goal
-is to catch *accidental* wins from `exact?`, `simp`, or `apply`-ing a
-forbidden lemma — not to be robust against adversarial cheating.
+The check follows two paths into the proof term:
+- *direct* — names that appear in the immediate proof term (catches a literal
+  `exact <forbidden>` or `simp [<forbidden>]`);
+- *helper* — bodies of auto-generated helpers under the declaration's own
+  namespace (e.g., `<decl>._proof_*` that `grind` / `decide` / `omega`
+  synthesize to bury their certificate).
+
+User-defined wrappers in *other* namespaces are NOT followed; library
+indirection through mathlib is NOT followed (it would explode and
+false-positive via the algebra-hierarchy proof structure).
+
+Forbidden names match by either suffix (so `mul_one` catches `Nat.mul_one`)
+or prefix (so `Lean.Grind` catches `Lean.Grind.CommRing.…`, useful for
+blocking entire decision-procedure namespaces).
+
+Per the design doc, the goal is to catch *accidental* wins from `exact?`,
+`simp`, default-tactic invocations like `grind`, etc. — not to be robust
+against adversarial cheating. A user-defined wrapper in an unrelated
+namespace still defeats it.
 
 Stacks with other attributes (`@[simp, avoiding …]`), works on any kind of
 declaration, and can be removed by deleting one line.
@@ -27,9 +42,28 @@ namespace CompanionHelper
 
 open Lean
 
-/-- Set of `Expr.const` names appearing in `e`. -/
-private def collectConstNames (e : Expr) : NameSet :=
-  e.foldConsts {} fun n s => s.insert n
+/-- Set of `Expr.const` names appearing in `e`, plus the bodies of any
+auto-generated helper lemmas under `decl`'s own namespace (e.g.,
+`decl._proof_1_1` that `grind`/`decide`/`omega` synthesize to hide their proof).
+Library references are intentionally NOT followed — recursing through mathlib
+would explode and would also false-positive (e.g., `add_assoc` transitively
+mentions `eq_neg_of_add_eq_zero_*` via the AddGroup proof structure). -/
+private partial def collectConstNamesDeep (env : Environment) (decl : Name) (e : Expr)
+    (visited : NameSet := {}) : NameSet := Id.run do
+  let mut acc := e.foldConsts {} fun n s => s.insert n
+  let mut visited := visited
+  for n in acc do
+    if visited.contains n then continue
+    visited := visited.insert n
+    -- Only recurse into helpers under `decl`'s namespace. Catches `grind`'s
+    -- `_proof_*` indirection without walking the rest of mathlib.
+    unless decl.isPrefixOf n do continue
+    let some info := env.find? n | continue
+    let some body := info.value? (allowOpaque := true) | continue
+    for m in collectConstNamesDeep env decl body visited do
+      acc := acc.insert m
+      visited := visited.insert m
+  return acc
 
 /-- Component path of a `Name`, innermost first. E.g. `Nat.mul_one` → `["mul_one", "Nat"]`. -/
 private partial def Name.componentsRevS : Lean.Name → List String
@@ -45,6 +79,18 @@ private def isNameSuffix (avoid used : Lean.Name) : Bool :=
     | _,      []     => false
     | a :: as, b :: bs => a == b && go as bs
   go (Name.componentsRevS avoid) (Name.componentsRevS used)
+
+/-- True iff `avoid`'s component path is a head (left-prefix) of `used`'s,
+i.e. `avoid` is a strict-or-equal namespace of `used`. E.g.
+`Lean.Grind ⊑ Lean.Grind.CommRing.Stepwise.unsat_eq`. Used to forbid every
+constant inside an entire namespace — handy for blocking decision-procedure
+machinery like `Lean.Grind.*` that `grind` injects into proof terms. -/
+private def isNamePrefix (avoid used : Lean.Name) : Bool :=
+  let rec go : List String → List String → Bool
+    | [],      _      => true
+    | _,       []     => false
+    | a :: as, b :: bs => a == b && go as bs
+  go (Name.componentsRevS avoid).reverse (Name.componentsRevS used).reverse
 
 /-- Attribute syntax: `@[avoiding Foo.bar, Baz.qux]`. -/
 syntax (name := avoiding) "avoiding " ident,* : attr
@@ -67,12 +113,12 @@ initialize registerBuiltinAttribute {
     -- opaque definitions; without it, `value?` returns `none` for them.
     let some value := info.value? (allowOpaque := true)
       | throwError "avoiding: declaration `{decl}` has no body to inspect"
-    let used := collectConstNames value
+    let used := collectConstNamesDeep env decl value
     let mut violations : Array Name := #[]
     for av in avoidIdents do
       let avName := av.getId
       for u in used do
-        if isNameSuffix avName u then
+        if isNameSuffix avName u || isNamePrefix avName u then
           violations := violations.push u
     unless violations.isEmpty do
       throwError "declaration '{decl}' uses forbidden lemma(s): {violations.toList}"
