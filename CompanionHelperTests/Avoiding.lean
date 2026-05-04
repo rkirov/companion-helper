@@ -78,14 +78,17 @@ error: declaration 'AvoidingTests.aesop_mathlib_dirty' uses forbidden lemma(s): 
 theorem aesop_mathlib_dirty {G : Type*} [Group G] (a b : G) :
     (a * b)⁻¹ = b⁻¹ * a⁻¹ := by aesop
 
--- 10. KNOWN LIMITATION: `grind` and `@[grind =]` lemmas. `min_def` is
--- tagged `@[grind =]` and grind genuinely uses it to close `min a b = a`
--- from `a ≤ b`. But grind packages its proof inside an auto-generated
--- helper `<thm>._proof_1_1`, and our shallow check sees only the helper's
--- name in the top-level proof term. The forbidden `min_def` reference is
--- one level deeper. Expected to compile cleanly.
+-- 10. `grind` and `@[grind =]` lemmas. `min_def` is tagged `@[grind =]` and
+-- grind genuinely uses it to close `min a b = a` from `a ≤ b`. The proof is
+-- bundled inside an auto-generated helper `<thm>._proof_1_1`; the recursive
+-- collector follows helpers under the declaration's namespace and finds the
+-- buried `min_def` reference.
+/--
+error: declaration 'AvoidingTests.grind_min_def_caught' uses forbidden lemma(s): [min_def]
+-/
+#guard_msgs in
 @[avoiding min_def]
-theorem grind_min_def_not_caught {α : Type*} [LinearOrder α] (a b : α) (h : a ≤ b) :
+theorem grind_min_def_caught {α : Type*} [LinearOrder α] (a b : α) (h : a ≤ b) :
     min a b = a := by grind
 
 -- 11. The default state of a companion exercise: stubbed with `sorry`.
@@ -109,5 +112,20 @@ error: declaration 'AvoidingTests.open_caught' uses forbidden lemma(s): [Avoidin
 open OpenTestNs in
 @[avoiding helper]
 theorem open_caught (n : Nat) : n + 0 = n := by exact helper n
+
+-- 13. Namespace-prefix matching. `@[avoiding Foo]` rejects every constant
+-- whose name starts with `Foo.…`. Useful for blocking entire decision-
+-- procedure namespaces (e.g., `Lean.Grind` for `grind`'s polynomial-ring
+-- machinery) without enumerating every internal lemma.
+namespace PrefixTestNs
+theorem inner (n : Nat) : n + 0 = n := Nat.add_zero n
+end PrefixTestNs
+
+/--
+error: declaration 'AvoidingTests.prefix_match_caught' uses forbidden lemma(s): [AvoidingTests.PrefixTestNs.inner]
+-/
+#guard_msgs in
+@[avoiding AvoidingTests.PrefixTestNs]
+theorem prefix_match_caught (n : Nat) : n + 0 = n := PrefixTestNs.inner n
 
 end AvoidingTests
