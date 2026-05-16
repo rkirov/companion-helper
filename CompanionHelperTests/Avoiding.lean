@@ -2,6 +2,7 @@ import CompanionHelper
 import Mathlib.Algebra.Group.Basic
 import Mathlib.Order.Defs.LinearOrder
 import Mathlib.Tactic.Linter.Style
+import Mathlib.Data.Complex.Basic
 import Aesop
 
 /-!
@@ -12,7 +13,7 @@ for the simple cases; later tests pull in mathlib.
 namespace AvoidingTests
 
 -- 1. Ordinary `theorem` without the attribute is unaffected.
-theorem plain_no_attr (n : Nat) : n + 0 = n := by rfl
+theorem plain_no_attr (n : Nat) : n + 0 = n :=  by rfl
 
 -- 2. Attribute attached, proof is clean → succeeds.
 @[avoiding Nat.mul_one]
@@ -32,7 +33,7 @@ error: declaration 'AvoidingTests.dirty_simp' uses forbidden lemma(s): [Nat.mul_
 -/
 #guard_msgs in
 @[avoiding Nat.mul_one]
-theorem dirty_simp (n : Nat) : n * 1 = n := by simp [Nat.mul_one]
+theorem dirty_simp (n : Nat) : n * 1 = n := by simp only [Nat.mul_one]
 
 -- 5. Multiple listed, only one used → error names just the used one.
 /--
@@ -49,10 +50,10 @@ theorem stacks_clean (n : Nat) : n + 0 = n := by rfl
 -- 7. Bare `simp` (no explicit lemma list) reaches the forbidden lemma through
 -- its default simp set → caught. `Nat.mul_one` is `@[simp]` in core Lean.
 /--
-error: declaration 'AvoidingTests.dirty_simp_default' uses forbidden lemma(s): [Nat.mul_one]
+error: declaration 'AvoidingTests.dirty_simp_default' uses forbidden lemma(s): [mul_one]
 -/
 #guard_msgs in
-@[avoiding Nat.mul_one]
+@[avoiding mul_one]
 theorem dirty_simp_default (n : Nat) : n * 1 = n := by simp
 
 -- 8. Mathlib-flavored: `(a * b)⁻¹ = b⁻¹ * a⁻¹` in any group. The textbook
@@ -127,5 +128,46 @@ error: declaration 'AvoidingTests.prefix_match_caught' uses forbidden lemma(s): 
 #guard_msgs in
 @[avoiding AvoidingTests.PrefixTestNs]
 theorem prefix_match_caught (n : Nat) : n + 0 = n := PrefixTestNs.inner n
+
+-- 14. Instance-specific banning. `add_comm` is polymorphic over any
+-- `AddCommMonoid`, so banning the lemma name itself would forbid it on
+-- every type. Banning a single `Complex.*` instance isn't enough either:
+-- different proof paths thread through different algebraic-structure
+-- instances. `ring` resolves `add_comm`'s typeclass arg through
+-- `Complex.instCommSemiring`; a direct `exact add_comm` resolves through
+-- `Complex.commRing`. Listing both covers the realistic paths, while uses
+-- on ℝ (which carry `Real.*` instances) remain unaffected.
+
+/--
+error: declaration 'AvoidingTests.complex_add_comm_ban_ring' uses forbidden lemma(s): [Complex.instCommSemiring]
+-/
+#guard_msgs in
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+theorem complex_add_comm_ban_ring (α β : ℂ) : α + β = β + α := by ring
+
+/--
+error: declaration 'AvoidingTests.complex_add_comm_ban_grind' uses forbidden lemma(s): [Complex.instField]
+-/
+#guard_msgs in
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+theorem complex_add_comm_ban_grind (α β : ℂ) : α + β = β + α := by grind
+
+/--
+error: declaration 'AvoidingTests.complex_add_comm_ban_direct' uses forbidden lemma(s): [Complex.commRing]
+-/
+#guard_msgs in
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+theorem complex_add_comm_ban_direct (a b : ℂ) : a + b = b + a := by
+  exact add_comm a b
+
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+theorem complex_add_comm_allow (a b : ℂ) : a + b = b + a := by
+  apply Complex.ext
+  · simp [Complex.add_re]; ring
+  · simp [Complex.add_im]; ring
+
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+theorem real_add_comm_allow (a b : ℝ) : a + b = b + a := by
+  exact add_comm a b
 
 end AvoidingTests

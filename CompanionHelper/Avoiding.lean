@@ -66,31 +66,29 @@ private partial def collectConstNamesDeep (env : Environment) (decl : Name) (e :
   return acc
 
 /-- Component path of a `Name`, innermost first. E.g. `Nat.mul_one` → `["mul_one", "Nat"]`. -/
-private partial def Name.componentsRevS : Lean.Name → List String
+private partial def Name.componentsRevS : Name → List String
   | .anonymous => []
   | .str pre s => s :: Name.componentsRevS pre
   | .num pre i => s!"{i}" :: Name.componentsRevS pre
 
+/-- True iff `xs` is a prefix of `ys`. -/
+private def isListPrefix : List String → List String → Bool
+  | [],      _       => true
+  | _,       []      => false
+  | a :: as, b :: bs => a == b && isListPrefix as bs
+
 /-- True iff `avoid`'s component path is a tail (right-suffix) of `used`'s.
 E.g. `mul_one ⊑ Nat.mul_one`, `Group.mul_one ⊑ Foo.Group.mul_one`. -/
-private def isNameSuffix (avoid used : Lean.Name) : Bool :=
-  let rec go : List String → List String → Bool
-    | [],     _      => true
-    | _,      []     => false
-    | a :: as, b :: bs => a == b && go as bs
-  go (Name.componentsRevS avoid) (Name.componentsRevS used)
+private def isNameSuffix (avoid used : Name) : Bool :=
+  isListPrefix (Name.componentsRevS avoid) (Name.componentsRevS used)
 
 /-- True iff `avoid`'s component path is a head (left-prefix) of `used`'s,
 i.e. `avoid` is a strict-or-equal namespace of `used`. E.g.
 `Lean.Grind ⊑ Lean.Grind.CommRing.Stepwise.unsat_eq`. Used to forbid every
 constant inside an entire namespace — handy for blocking decision-procedure
 machinery like `Lean.Grind.*` that `grind` injects into proof terms. -/
-private def isNamePrefix (avoid used : Lean.Name) : Bool :=
-  let rec go : List String → List String → Bool
-    | [],      _      => true
-    | _,       []     => false
-    | a :: as, b :: bs => a == b && go as bs
-  go (Name.componentsRevS avoid).reverse (Name.componentsRevS used).reverse
+private def isNamePrefix (avoid used : Name) : Bool :=
+  isListPrefix (Name.componentsRevS avoid).reverse (Name.componentsRevS used).reverse
 
 /-- Attribute syntax: `@[avoiding Foo.bar, Baz.qux]`. -/
 syntax (name := avoiding) "avoiding " ident,* : attr
