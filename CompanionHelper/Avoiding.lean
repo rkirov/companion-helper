@@ -1,4 +1,6 @@
-import Lean
+module
+
+public meta import Lean
 
 /-!
 # `@[avoiding …]` attribute
@@ -37,6 +39,8 @@ namespace still defeats it.
 Stacks with other attributes (`@[simp, avoiding …]`), works on any kind of
 declaration, and can be removed by deleting one line.
 -/
+
+public meta section
 
 namespace CompanionHelper
 
@@ -116,10 +120,15 @@ initialize registerBuiltinAttribute {
     for av in avoidIdents do
       let avName := av.getId
       for u in used do
+        -- Match against the user-facing name: inside a `module`, non-`public`
+        -- declarations carry a `_private.<Module>.0.` prefix.
+        let u := privateToUserName u
         if isNameSuffix avName u || isNamePrefix avName u then
           violations := violations.push u
     unless violations.isEmpty do
-      throwError "declaration '{decl}' uses forbidden lemma(s): {violations.toList}"
+      throwError "declaration '{privateToUserName decl}' uses forbidden lemma(s): {violations.toList}"
 }
 
 end CompanionHelper
+
+end

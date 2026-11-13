@@ -1,1 +1,3 @@
-import CompanionHelperTests.Avoiding
+module
+
+public import CompanionHelperTests.Avoiding

@@ -1,9 +1,11 @@
-import CompanionHelper
-import Mathlib.Algebra.Group.Basic
-import Mathlib.Order.Defs.LinearOrder
-import Mathlib.Tactic.Linter.Style
-import Mathlib.Data.Complex.Basic
-import Aesop
+module
+
+public import CompanionHelper
+public import Mathlib.Algebra.Group.Basic
+public import Mathlib.Order.Defs.LinearOrder
+public import Mathlib.Tactic.Linter.Style
+public import Mathlib.Basic.Complex.Basic
+public import Aesop
 
 /-!
 Tests for `@[avoiding …]`. Uses `Nat.mul_one` as the stand-in forbidden lemma
@@ -135,38 +137,38 @@ theorem prefix_match_caught (n : Nat) : n + 0 = n := PrefixTestNs.inner n
 -- different proof paths thread through different algebraic-structure
 -- instances. `ring` resolves `add_comm`'s typeclass arg through
 -- `Complex.instCommSemiring`; a direct `exact add_comm` resolves through
--- `Complex.commRing`. Listing both covers the realistic paths, while uses
+-- the `Complex.instAddCommMonoid` shortcut instance. Listing these covers the realistic paths, while uses
 -- on ℝ (which carry `Real.*` instances) remain unaffected.
 
 /--
 error: declaration 'AvoidingTests.complex_add_comm_ban_ring' uses forbidden lemma(s): [Complex.instCommSemiring]
 -/
 #guard_msgs in
-@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField, Complex.instAddCommMonoid]
 theorem complex_add_comm_ban_ring (α β : ℂ) : α + β = β + α := by ring
 
 /--
 error: declaration 'AvoidingTests.complex_add_comm_ban_grind' uses forbidden lemma(s): [Complex.instField]
 -/
 #guard_msgs in
-@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField, Complex.instAddCommMonoid]
 theorem complex_add_comm_ban_grind (α β : ℂ) : α + β = β + α := by grind
 
 /--
-error: declaration 'AvoidingTests.complex_add_comm_ban_direct' uses forbidden lemma(s): [Complex.commRing]
+error: declaration 'AvoidingTests.complex_add_comm_ban_direct' uses forbidden lemma(s): [Complex.instAddCommMonoid]
 -/
 #guard_msgs in
-@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField, Complex.instAddCommMonoid]
 theorem complex_add_comm_ban_direct (a b : ℂ) : a + b = b + a := by
   exact add_comm a b
 
-@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField, Complex.instAddCommMonoid]
 theorem complex_add_comm_allow (a b : ℂ) : a + b = b + a := by
   apply Complex.ext
   · simp [Complex.add_re]; ring
   · simp [Complex.add_im]; ring
 
-@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField]
+@[avoiding Complex.instCommSemiring, Complex.commRing, Complex.instField, Complex.instAddCommMonoid]
 theorem real_add_comm_allow (a b : ℝ) : a + b = b + a := by
   exact add_comm a b
 

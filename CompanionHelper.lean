@@ -1,1 +1,3 @@
-import CompanionHelper.Avoiding
+module
+
+public import CompanionHelper.Avoiding
