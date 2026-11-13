@@ -61,7 +61,9 @@ private partial def collectConstNamesDeep (env : Environment) (decl : Name) (e :
     visited := visited.insert n
     -- Only recurse into helpers under `decl`'s namespace. Catches `grind`'s
     -- `_proof_*` indirection without walking the rest of mathlib.
-    unless decl.isPrefixOf n do continue
+    -- Compare user-facing names: in a `module`, a public theorem's helpers are
+    -- private (`_private.<Module>.0.decl._proof_1`) while `decl` is not.
+    unless (privateToUserName decl).isPrefixOf (privateToUserName n) do continue
     let some info := env.find? n | continue
     let some body := info.value? (allowOpaque := true) | continue
     for m in collectConstNamesDeep env decl body visited do
@@ -108,7 +110,9 @@ initialize registerBuiltinAttribute {
     unless kind == AttributeKind.global do
       throwError "`avoiding` only supports the global attribute kind"
     let avoidIdents := stx[1].getSepArgs
-    let env ← getEnv
+    -- Inside a `module`, the exported view of the environment hides theorem
+    -- bodies (and `_proof_*` helpers); inspect the private view instead.
+    let env := (← getEnv).setExporting false
     let some info := env.find? decl
       | throwError "avoiding: declaration `{decl}` not found"
     -- `allowOpaque := true` is required to get the body of theorems and

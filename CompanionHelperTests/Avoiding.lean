@@ -172,4 +172,28 @@ theorem complex_add_comm_allow (a b : ℂ) : a + b = b + a := by
 theorem real_add_comm_allow (a b : ℝ) : a + b = b + a := by
   exact add_comm a b
 
+-- 15. Module system: `public` theorems have their bodies hidden in the
+-- exported environment view; the check must still see them (direct and via
+-- `grind`'s `_proof_*` helpers).
+public section
+
+/--
+error: declaration 'AvoidingTests.public_dirty' uses forbidden lemma(s): [Nat.mul_one]
+-/
+#guard_msgs in
+@[avoiding Nat.mul_one]
+theorem public_dirty (n : Nat) : n * 1 = n := by
+  exact Nat.mul_one n
+
+/--
+error: declaration 'AvoidingTests.public_grind_caught' uses forbidden lemma(s): [min_def]
+-/
+#guard_msgs in
+@[avoiding min_def]
+theorem public_grind_caught {α : Type*} [LinearOrder α] (a b : α) (h : a ≤ b) :
+    min a b = a := by grind
+
+end
+
 end AvoidingTests
+
