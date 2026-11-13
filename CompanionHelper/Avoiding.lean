@@ -16,16 +16,20 @@ theorem mul_one_ex (n : Nat) : n * 1 = n := by
 -- error: declaration 'mul_one_ex' uses forbidden lemma(s): [Nat.mul_one]
 ```
 
-The check follows two paths into the proof term:
+The check follows three paths into the proof term:
 - *direct* — names that appear in the immediate proof term (catches a literal
   `exact <forbidden>` or `simp [<forbidden>]`);
 - *helper* — bodies of auto-generated helpers under the declaration's own
   namespace (e.g., `<decl>._proof_*` that `grind` / `decide` / `omega`
-  synthesize to bury their certificate).
+  synthesize to bury their certificate), followed to any depth;
+- *one hop* — bodies (and helpers) of declarations under the same root
+  namespace that the proof references directly. For a declaration
+  `Foo.Bar.thm` this is everything under `Foo`, so a same-project wrapper
+  `lemma helper := Nat.mul_one` is caught. Hops do not chain: a wrapper of a
+  wrapper is not followed. Top-level declarations (no namespace) get no hop.
 
-User-defined wrappers in *other* namespaces are NOT followed; library
-indirection through mathlib is NOT followed (it would explode and
-false-positive via the algebra-hierarchy proof structure).
+Library indirection (any other root namespace, e.g. mathlib) is NOT followed:
+it would explode and false-positive via the algebra-hierarchy proof structure.
 
 Forbidden names match by either suffix (so `mul_one` catches `Nat.mul_one`)
 or prefix (so `Lean.Grind` catches `Lean.Grind.CommRing.…`, useful for
@@ -33,8 +37,8 @@ blocking entire decision-procedure namespaces).
 
 Per the design doc, the goal is to catch *accidental* wins from `exact?`,
 `simp`, default-tactic invocations like `grind`, etc. — not to be robust
-against adversarial cheating. A user-defined wrapper in an unrelated
-namespace still defeats it.
+against adversarial cheating. A wrapper in an unrelated namespace, or two
+levels of wrappers, still defeats it.
 
 Stacks with other attributes (`@[simp, avoiding …]`), works on any kind of
 declaration, and can be removed by deleting one line.
@@ -46,29 +50,53 @@ namespace CompanionHelper
 
 open Lean
 
-/-- Set of `Expr.const` names appearing in `e`, plus the bodies of any
-auto-generated helper lemmas under `decl`'s own namespace (e.g.,
-`decl._proof_1_1` that `grind`/`decide`/`omega` synthesize to hide their proof).
-Library references are intentionally NOT followed — recursing through mathlib
-would explode and would also false-positive (e.g., `add_assoc` transitively
-mentions `eq_neg_of_add_eq_zero_*` via the AddGroup proof structure). -/
-private partial def collectConstNamesDeep (env : Environment) (decl : Name) (e : Expr)
+/-- Set of `Expr.const` names appearing in `e`, plus (recursively) the bodies
+of auto-generated helpers under `owner`'s own namespace — e.g. the
+`owner._proof_1_1` that `grind`/`decide`/`omega` synthesize to hide their
+proof. These are storage artifacts of the same declaration, so they are
+walked unboundedly. Nothing else is followed. -/
+private partial def collectWithHelpers (env : Environment) (owner : Name) (e : Expr)
     (visited : NameSet := {}) : NameSet := Id.run do
   let mut acc := e.foldConsts {} fun n s => s.insert n
   let mut visited := visited
+  -- Compare user-facing names: in a `module`, a public theorem's helpers are
+  -- private (`_private.<Module>.0.owner._proof_1`) while `owner` is not.
+  let ownerU := privateToUserName owner
   for n in acc do
     if visited.contains n then continue
     visited := visited.insert n
-    -- Only recurse into helpers under `decl`'s namespace. Catches `grind`'s
-    -- `_proof_*` indirection without walking the rest of mathlib.
-    -- Compare user-facing names: in a `module`, a public theorem's helpers are
-    -- private (`_private.<Module>.0.decl._proof_1`) while `decl` is not.
-    unless (privateToUserName decl).isPrefixOf (privateToUserName n) do continue
+    unless ownerU.isPrefixOf (privateToUserName n) do continue
     let some info := env.find? n | continue
     let some body := info.value? (allowOpaque := true) | continue
-    for m in collectConstNamesDeep env decl body visited do
+    for m in collectWithHelpers env owner body visited do
       acc := acc.insert m
       visited := visited.insert m
+  return acc
+
+/-- Names used by `decl`'s proof `value`:
+- the constants of `value` and of `decl`'s own helpers (`collectWithHelpers`);
+- when `userRoot? = some root`, additionally the constants (and helpers) of
+  every declaration under `root` that `decl` references *directly* — one hop.
+  This catches a same-project wrapper such as `lemma helper := Nat.mul_one`.
+  Hops do not chain (a wrapper of a wrapper is not followed) and never enter
+  other roots, so mathlib is not walked: that would explode and would
+  false-positive via the algebra-hierarchy proof structure.
+
+The hop targets are taken from the fixed set of direct references, so the
+result does not depend on the order in which names are visited. -/
+private def collectConstNamesDeep (env : Environment) (userRoot? : Option Name)
+    (decl : Name) (value : Expr) : NameSet := Id.run do
+  let direct := collectWithHelpers env decl value
+  let some root := userRoot? | return direct
+  let declU := privateToUserName decl
+  let mut acc := direct
+  for n in direct do
+    let nU := privateToUserName n
+    unless root.isPrefixOf nU && !declU.isPrefixOf nU do continue
+    let some info := env.find? n | continue
+    let some body := info.value? (allowOpaque := true) | continue
+    for m in collectWithHelpers env n body do
+      acc := acc.insert m
   return acc
 
 /-- Component path of a `Name`, innermost first. E.g. `Nat.mul_one` → `["mul_one", "Nat"]`. -/
@@ -76,6 +104,15 @@ private partial def Name.componentsRevS : Name → List String
   | .anonymous => []
   | .str pre s => s :: Name.componentsRevS pre
   | .num pre i => s!"{i}" :: Name.componentsRevS pre
+
+/-- Root namespace of `n`, i.e. its outermost `.str` component. `none` for
+top-level names like `mul_one_ex` (no enclosing namespace). E.g.
+`AvoidingTests.Foo.bar` → `some \`AvoidingTests`. -/
+private def Name.root? (n : Name) : Option Name :=
+  match (Name.componentsRevS (privateToUserName n)).reverse with
+  | []     => none
+  | [_]    => none
+  | s :: _ => some (.str .anonymous s)
 
 /-- True iff `xs` is a prefix of `ys`. -/
 private def isListPrefix : List String → List String → Bool
@@ -119,7 +156,7 @@ initialize registerBuiltinAttribute {
     -- opaque definitions; without it, `value?` returns `none` for them.
     let some value := info.value? (allowOpaque := true)
       | throwError "avoiding: declaration `{decl}` has no body to inspect"
-    let used := collectConstNamesDeep env decl value
+    let used := collectConstNamesDeep env (Name.root? decl) decl value
     let mut violations : Array Name := #[]
     for av in avoidIdents do
       let avName := av.getId

@@ -31,9 +31,13 @@ theorem mul_one_ex (n : Nat) : n * 1 = n := by exact Nat.mul_one n
 lemma all get caught — each materializes a proof term that references the
 lemma directly.
 
-The check is intentionally shallow (one level — direct constants in the proof
-term). A user-defined wrapper defeats it. Per the design doc, the goal is to
-catch *accidental* wins, not to be robust against adversarial cheating.
+The check looks at the constants in the proof term, the auto-generated
+`_proof_*` helpers of the declaration (where `grind`, `decide` and `omega`
+hide their certificates), and one hop into declarations from the same root
+namespace that the proof uses directly — so a same-project wrapper around the
+forbidden lemma is caught too. It does not walk into other namespaces such as
+mathlib, and a wrapper of a wrapper defeats it. Per the design doc, the goal
+is to catch *accidental* wins, not to be robust against adversarial cheating.
 
 Stacks with other attributes:
 
@@ -50,5 +54,6 @@ lake build                                  # main library
 lake build CompanionHelperTests             # tests (use #guard_msgs)
 ```
 
-Toolchain: `leanprover/lean4:v4.29.0`. Mathlib pinned at `v4.29.0` (used in
-tests; the core library itself only depends on `Lean`).
+Toolchain: `leanprover/lean4:v4.35.0`. Mathlib pinned at `v4.35.0` (used in
+tests; the core library itself only depends on `Lean`). The library and tests
+use the Lean module system.

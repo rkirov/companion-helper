@@ -195,5 +195,56 @@ theorem public_grind_caught {α : Type*} [LinearOrder α] (a b : α) (h : a ≤ 
 
 end
 
+-- 16. One-level cross-decl walk into user-namespace siblings. The naïve
+-- cheat is to hide the forbidden lemma behind a one-line wrapper in the
+-- same file. The walker follows one hop into any decl under the
+-- attributed decl's root namespace (here, `AvoidingTests`), so the
+-- wrapper is caught.
+theorem wrapper_for_mul_one (n : Nat) : n * 1 = n := Nat.mul_one n
+
+/--
+error: declaration 'AvoidingTests.cross_decl_caught' uses forbidden lemma(s): [Nat.mul_one]
+-/
+#guard_msgs in
+@[avoiding Nat.mul_one]
+theorem cross_decl_caught (n : Nat) : n * 1 = n := wrapper_for_mul_one n
+
+-- 17. Cross-decl walk is one-level only: a wrapper that itself calls
+-- another wrapper is NOT followed past the first hop. Keeps the walker
+-- bounded — full transitive walking would explode through mathlib.
+theorem wrapper_lvl_2 (n : Nat) : n * 1 = n := Nat.mul_one n
+theorem wrapper_lvl_1 (n : Nat) : n * 1 = n := wrapper_lvl_2 n
+
+@[avoiding Nat.mul_one]
+theorem cross_decl_two_hops_silent (n : Nat) : n * 1 = n := wrapper_lvl_1 n
+
+-- 18. The one-hop check does not depend on visiting order: the proof
+-- mentions two wrappers, one of which also mentions the other. The inner
+-- wrapper must still be walked. (Two mirrored pairs so that both name
+-- orders are exercised.)
+theorem ord_inner_a (n : Nat) : n * 1 = n := Nat.mul_one n
+theorem ord_outer_a (n : Nat) : n * 1 = n ∧ True := ⟨ord_inner_a n, trivial⟩
+
+/--
+error: declaration 'AvoidingTests.ord_caught_a' uses forbidden lemma(s): [Nat.mul_one]
+-/
+#guard_msgs in
+@[avoiding Nat.mul_one]
+theorem ord_caught_a (n : Nat) : n * 1 = n := by
+  have _h := ord_outer_a n
+  exact ord_inner_a n
+
+theorem ord_outer_b (n : Nat) : n * 1 = n := Nat.mul_one n
+theorem ord_inner_b (n : Nat) : n * 1 = n ∧ True := ⟨ord_outer_b n, trivial⟩
+
+/--
+error: declaration 'AvoidingTests.ord_caught_b' uses forbidden lemma(s): [Nat.mul_one]
+-/
+#guard_msgs in
+@[avoiding Nat.mul_one]
+theorem ord_caught_b (n : Nat) : n * 1 = n := by
+  have _h := ord_inner_b n
+  exact ord_outer_b n
+
 end AvoidingTests
 
